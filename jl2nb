@@ -1,0 +1,162 @@
+#!/bin/sh
+# see https://discourse.julialang.org/t/useful-julia-script-tips-workaround-shebang/15584
+#=
+exec julia --startup-file=no "$0" "$@"
+=#
+
+description="""
+Convert  julia  script  with Literate.jl  markup  to  jupyter
+notebook.  The  resulting notebook can be  enhanced with some
+markup  for reveal.js  slides, and  it is  compatible to  the
+RISE.js extension of Jupyter.
+
+Additional markup is given as a julia call to Julia code 
+provided as an argument to @@{ }
+Currently, the  following markup  is available  (for meaning,
+see also documentation of Jupyter and reveal.js):
+
+img(name;width=890)    : Include image with given width
+
+imageslide(name;width=890) : Slide with one image of given width
+                         This is meant to include latex beamer 
+                         slides converted to a series of png files
+
+slide()                : Mark current cell as slide
+
+subslide()             : Mark current cell as sub-slide
+
+fragment()             : Mark current cell as fragment
+
+header(string)         : Presentation header
+
+footer(string)         : Presentation footer
+
+theme(string)          : Presentation theme 
+                         (see https://github.com/hakimel/reveal.js/tree/master/css/theme)
+
+Additional markup can be added by providing a julia source file
+containing markup functions via the --usermarkup option. 
+A markup function should just return the string which shall be used to replace
+the markup in the text of the jupyter cell.
+"""
+
+using Pkg
+ensure(pkg)=if !haskey(Pkg.installed(),pkg) error("""Missing package $(pkg). Install by Pkg.add("$(pkg)").""") end
+ensure("ArgParse")
+ensure("Literate")
+
+using Literate
+using ArgParse
+using Logging
+
+#      
+# Markup replacements to control presentation generation
+#
+
+img(name;width=890)="""<img src="$(name)" width=$(width) />"""
+
+imageslide(name;width=890)="""%% { "slideshow": {"slide_type": "slide" }}\n#\n# <img src="$(name)" width=$(width) />"""
+
+slide()="""%% { "slideshow": {"slide_type": "slide" }}"""
+
+subslide()="""%% { "slideshow": {"slide_type": "subslide" }}"""
+
+fragment()="""%% { "slideshow": {"slide_type": "fragment" }}"""
+
+_header=""
+function header(string::String)
+    global _header=replace(string,"\""=>"\\\"")
+    return ""
+end
+
+_footer=""
+function footer(string::String)
+    global _footer=replace(string,"\""=>"\"")
+    return ""
+end
+
+_theme="simple"
+function theme(string::String)
+    global _theme=string
+    return ""
+end
+
+_progress=true
+function progress(flag::Bool)
+    global _progress=flag
+    return ""
+end
+
+#
+# We need to do the argparsing in the global context
+# because we want to be able to include afile to define
+# additional user markup.
+
+# Argument list parsing
+settings = ArgParseSettings()
+settings.preformatted_description=true
+settings.description=description
+
+    
+add_arg_table(settings,
+              "file",                  Dict(:help => "Julia file to be converted",:required => true),
+              ["--execute", "-x"],     Dict(:help => "Execute notebook on creation",:action => :store_true),
+              ["--usermarkup"],        Dict(:help => "Name of additional file containing user defined markup",:action => :store_arg),
+              ["--nocredit"],          Dict(:help => "Do not show credits for literate.jl in the notebook",:action => :store_true),
+              ["--autolaunch", "-a"],  Dict(:help => "Autolaunch slides when starting notebook",:action => :store_true)
+              )
+
+parsed_args=parse_args(ARGS, settings)
+
+usermarkup=parsed_args["usermarkup"]
+if usermarkup!=nothing
+    include(pwd()*"/"*usermarkup)
+    @info "Included file from "*pwd()*"/"*usermarkup
+end
+
+
+
+# Replacement function for replace_markup
+function replace_match(match)
+    # Get Julia code from match
+    matchx=replace(match,"@@{"=>"")
+    matchx=replace(matchx,"}"=>"")
+    # Evaluate julia code
+    return try 
+        eval(Meta.parse(matchx))
+    catch err
+        if isa(err, UndefVarError)
+            # Just log the error and return the string to be eventually replaced
+            @error "UndefVarError in markup expression "*match*" \n       Missing usermarkup file ?"
+            match
+        end
+    end
+end
+
+# Preprocess input to Literate.notebook()
+# This is just a simple text replacement.
+replace_markup(data)=replace(data,r"@@{\s*[[:print:]]+\s*}" => replace_match)
+
+# Postprocess output from Literate.notebook()
+# The output comes as a hierarchical dict
+function add_rise_metadata(data)
+    # See https://rise.readthedocs.io/en/maint-5.5/customize.html#reveal-js-configuration-options
+    data["metadata"]["rise"]=Dict(:theme => _theme,
+                                  :autolaunch => parsed_args["autolaunch"],
+                                  :progress => _progress,
+                                  :header => _header,
+                                  :footer => _footer,
+                                  :auto_select => true,
+                                  :scroll => true)
+    return data
+end      
+
+# Create notebook using Literate.jl
+Literate.notebook(parsed_args["file"],
+                  ".",
+                  execute=parsed_args["execute"],
+                  credit=!parsed_args["nocredit"],
+                  preprocess=replace_markup,
+                  postprocess=add_rise_metadata)
+
+
