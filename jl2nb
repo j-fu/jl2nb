@@ -5,13 +5,14 @@ exec julia --startup-file=no "$0" "$@"
 =#
 
 description="""
-Convert  julia  script  with Literate.jl  markup  to  jupyter
-notebook.  The  resulting notebook can be  enhanced with some
-markup  for reveal.js  slides, and  it is  compatible to  the
-RISE.js extension of Jupyter.
+
+Convert julia script with  Literate.jl markup including block comments
+to jupyter notebook using Literate.jl.   The resulting notebook can be
+enhanced with some  markup for reveal.js slides, and  it is compatible
+to the RISE.js extension of Jupyter.
 
 Additional markup is given as a julia call to Julia code 
-provided as an argument to @@{ }
+provided as an argument to @__{ }__.
 Currently, the  following markup  is available  (for meaning,
 see also documentation of Jupyter and reveal.js):
 
@@ -114,13 +115,43 @@ if usermarkup!=nothing
     @info "Included file from "*pwd()*"/"*usermarkup
 end
 
+# Turn block comments into "normal" hashe comments
+# as they currently are not handled by Literate.jl.
+function hashify_block_comments(input)
+    lines_in = collect(eachline(IOBuffer(input)))
+    lines_out=IOBuffer()
+    line_number=0
+    in_block_comment_region=false
+    for line in lines_in
+        line_number+=1
+        if occursin(r"^#=", line)
+            if in_block_comment_region
+                error("line $(line_number): already in block comment region\n$(line)")
+            end
+            println(lines_out,replace(line,r"^#=" => "#"))
+            in_block_comment_region=true
+        elseif occursin(r"^=#", line)
+            if !in_block_comment_region
+                error("line $(line_number): not in block comment region\n$(line)")
+            end
+            println(lines_out,replace(line,r"^=#" => "#"))
+            in_block_comment_region=false
+        else
+            if in_block_comment_region
+                println(lines_out,"# "*line)
+            else
+                println(lines_out,line)
+            end
+        end
+    end
+    return String(take!(lines_out))
+end
 
-
-# Replacement function for replace_markup
+# Replacement function for replace_additional_markup
 function replace_match(match)
     # Get Julia code from match
-    matchx=replace(match,"@@{"=>"")
-    matchx=replace(matchx,"}"=>"")
+    matchx=replace(match,"@__{"=>"")
+    matchx=replace(matchx,"}__"=>"")
     # Evaluate julia code
     return try 
         eval(Meta.parse(matchx))
@@ -133,9 +164,9 @@ function replace_match(match)
     end
 end
 
-# Preprocess input to Literate.notebook()
-# This is just a simple text replacement.
-replace_markup(data)=replace(data,r"@@{\s*[[:print:]]+\s*}" => replace_match)
+# Replace additional markup 
+replace_additional_markup(data)=replace(data,r"@__{\s*[[:print:]]+\s*}__" => replace_match)
+
 
 # Postprocess output from Literate.notebook()
 # The output comes as a hierarchical dict
@@ -156,7 +187,7 @@ Literate.notebook(parsed_args["file"],
                   ".",
                   execute=parsed_args["execute"],
                   credit=!parsed_args["nocredit"],
-                  preprocess=replace_markup,
+                  preprocess=data -> data |> replace_additional_markup |> hashify_block_comments,
                   postprocess=add_rise_metadata)
 
 
