@@ -20,7 +20,7 @@ Currently, this runs on Linux and (probably) MacOSX.
 
 This should run under all systems
 
-- Invoke `jl2nb --help` for documentation
+- Invoke `julia jl2nb --help` for documentation
 - Inspect the example.
 
 ## Three mode handling in emacs
