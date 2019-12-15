@@ -45,24 +45,29 @@ using Pkg
 ensure(pkg)=if !haskey(Pkg.installed(),pkg) error("""Missing package $(pkg). Install by Pkg.add("$(pkg)").""") end
 ensure("ArgParse")
 ensure("Literate")
+ensure("Weave")
 
 using Literate
+import Weave
 using ArgParse
 using Logging
 
+
+
+noweave=true
 #      
 # Markup replacements to control presentation generation
 #
 
 img(name;width=890)="""<img src="$(name)" width=$(width) />"""
 
-imageslide(name;width=890)="""%% { "slideshow": {"slide_type": "slide" }}\n#\n# <img src="$(name)" width=$(width) />"""
+imageslide(name;width=890)=noweave ? """%% { "slideshow": {"slide_type": "slide" }}\n#\n# <img src="$(name)" width=$(width) />""" : ""
 
-slide()="""%% { "slideshow": {"slide_type": "slide" }}"""
+slide()=noweave ? """%% { "slideshow": {"slide_type": "slide" }}""" : ""
 
-subslide()="""%% { "slideshow": {"slide_type": "subslide" }}"""
+subslide()=noweave ? """%% { "slideshow": {"slide_type": "subslide" }}""" : ""
 
-fragment()="""%% { "slideshow": {"slide_type": "fragment" }}"""
+fragment()=noweave ? """%% { "slideshow": {"slide_type": "fragment" }}""" : ""
 
 _header=""
 function header(string::String)
@@ -102,6 +107,7 @@ settings.description=description
 add_arg_table(settings,
               "file",                  Dict(:help => "Julia file to be converted",:required => true),
               ["--execute", "-x"],     Dict(:help => "Execute notebook on creation",:action => :store_true),
+              ["--weave", "-w"],     Dict(:help => "Weave instead of notebook execution",:action => :store_true),
               ["--usermarkup"],        Dict(:help => "Name of additional file containing user defined markup",:action => :store_arg),
               ["--nocredit"],          Dict(:help => "Do not show credits for literate.jl in the notebook",:action => :store_true),
               ["--autolaunch", "-a"],  Dict(:help => "Autolaunch slides when starting notebook",:action => :store_true)
@@ -115,7 +121,7 @@ if usermarkup!=nothing
     @info "Included file from "*pwd()*"/"*usermarkup
 end
 
-# Turn block comments into "normal" hashe comments
+# Turn block comments into "normal" hash comments
 # as they currently are not handled by Literate.jl.
 function hashify_block_comments(input)
     lines_in = collect(eachline(IOBuffer(input)))
@@ -182,12 +188,27 @@ function add_rise_metadata(data)
     return data
 end      
 
-# Create notebook using Literate.jl
-Literate.notebook(parsed_args["file"],
-                  ".",
-                  execute=parsed_args["execute"],
-                  credit=!parsed_args["nocredit"],
-                  preprocess=data -> data |> replace_additional_markup |> hashify_block_comments,
-                  postprocess=add_rise_metadata)
 
+if parsed_args["weave"]
+    noweave=false
+    bname=splitext(basename(parsed_args["file"]))[1]
+    @show bname
+    Literate.markdown(parsed_args["file"],
+                      ".",
+                      credit=!parsed_args["nocredit"],
+                      documenter=false,
+                      preprocess=data -> data |> replace_additional_markup |> hashify_block_comments,
+                      )
+
+    run(`mv $(bname).md $(bname).jmd`)
+    Weave.weave(bname*".jmd",doctype="tex")
+else
+    # Create notebook using Literate.jl
+    Literate.notebook(parsed_args["file"],
+                      ".",
+                      execute=parsed_args["execute"],
+                      credit=!parsed_args["nocredit"],
+                      preprocess=data -> data |> replace_additional_markup |> hashify_block_comments,
+                      postprocess=add_rise_metadata)
+end
 

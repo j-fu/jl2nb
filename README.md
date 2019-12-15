@@ -1,20 +1,19 @@
 # jl2nb
 
 Create jupyter notebooks from julia source code with markup for reveal.js and RISE.js slides using [Literate.jl](https://fredrikekre.github.io/Literate.jl/stable/)
-for presentations with interactive Julia code. In particular, this script handles Julia block comments
-
-This code is considered experimental.
+for presentations with interactive Julia code. In particular, this script handles Julia block comments starting and ending in the first column.
+See also the discussion in [Presenting.md](Presenting.md).
 
 ## Installation as self-contained "shebang" script
 
-Currently, this runs on Linux and (probably) MacOSX.
+Currently, this works on Linux and (probably) MacOSX.
 
 - Have Julia on the PATH. 
 - Install the the tools described in  [Presenting.md](Presenting.md)
 - Add [Literate.jl](https://fredrikekre.github.io/Literate.jl/stable/) and [ArgParse.jl](http://carlobaldassi.github.io/ArgParse.jl/stable/)
 - Copy jl2nb to a directory on the PATH, make it executable
 - Invoke `jl2nb --help` for documentation
-- Inspect the example.
+- Inspect the example
 
 ## Use under julia
 
@@ -23,7 +22,7 @@ This should run under all systems
 - Invoke `julia jl2nb --help` for documentation
 - Inspect the example.
 
-## Three mode handling in emacs
+## Triple mode handling in emacs
 The following snippet helps with switching between julia, markdown and latex modes in emacs.
 It will work when the markdown chunks are put into block comments.
 

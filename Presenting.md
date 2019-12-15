@@ -33,7 +33,7 @@ Jupyter slideshow extension which allows to switch between notebook and presenta
 
 Unlike the slides created by the html export of Jupyter, the reveal.js presentation  started _keeps the code cells active_  .
 
-### [jl2nb](https://github.com/j-fu/jl2nb) (this packagee)
+### [jl2nb](https://github.com/j-fu/jl2nb) (this package)
 
 Wrapper script for Literate.jl allows to add slide tags and features for the RISE extension to a notebook.
 
