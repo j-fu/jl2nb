@@ -1,7 +1,7 @@
 #!/bin/sh
 # see https://discourse.julialang.org/t/useful-julia-script-tips-workaround-shebang/15584
 #=
-julia --startup-file=no --project=@. "$0" "$@"
+exec julia --startup-file=no --project=@. "$0" "$@"
 =#
 
 description="""
